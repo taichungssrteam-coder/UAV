@@ -1380,16 +1380,91 @@
       }
     });
 
+    // ----------------------------------------------------
+    // 【在這裡直接貼上 loadDashboardDataAsCards 函式】
+    // ----------------------------------------------------
+    async function loadDashboardDataAsCards(formIndex) {
+      if (elements.dashboardIframe) elements.dashboardIframe.style.display = 'none';
+      
+// 填入您的 5 個 Google Apps Script (GAS) 部署網址
+      const apiUrls = [
+        "https://script.google.com/macros/s/AKfycbwxmHXBpEOooT_zOdnDLBsdQhvxFNYMPjgtIDswFu7LxFJk-JkbrQdOGOwL87ValsY/exec", // 1. 裝備借用紀錄
+        "https://script.google.com/macros/s/AKfycbyRAJ8Tr2q1Sk3a3MKp1nIjio_axAnwYP76iq4SF_bAjcMSzhqRCK7SVAj037V_U120/exec", // 2. 裝備定期清單
+        "https://script.google.com/macros/s/AKfycbxdHUEY34te5kOJ03Io5npb8jHFq6O3iyfoLGZWfe4XlvgC19ln8eqviXBKhh1j-Eo8/exec", // 3. 裝備維修保養
+        "https://script.google.com/macros/s/AKfycbzubdCklnFC_iKWOdVmikNhgM-Ls02dAmrJDr3ajX2nnbCG_QsYMj8mtUBPVonMfaxn/exec", // 4. 勤務出擊 (已補上陣列間隔逗號)
+        "https://script.google.com/macros/s/AKfycbyOWSXfxex1dRkgUan91FWmU-pIlxS-7iHyaNP9UIAkxLeCPWj29oPFlxfXstUzaUdl/exec"  // 5. 飛安通報
+      ];
+      
+      const targetApiUrl = apiUrls[formIndex] || apiUrls[0];
+      
+let cardContainer = document.getElementById('dashboardCardContainer');
+  if (!cardContainer) {
+    cardContainer = document.createElement('div');
+    cardContainer.id = 'dashboardCardContainer';
+    // ✅ 修正後：加入 max-h-[75vh] 與 overflow-y-auto 讓電腦版可以順暢上下滑動
+    cardContainer.className = 'p-4 space-y-3 overflow-y-auto max-h-[75vh] bg-slate-950';
+    elements.dashboardModal.querySelector('.flex-1').appendChild(cardContainer);
+  }
+      
+      cardContainer.innerHTML = `
+        <div class="text-center py-10 text-slate-400">
+          <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+          <p class="text-xs">正在載入雲端後台數據...</p>
+        </div>
+      `;
+
+      try {
+        const response = await fetch(targetApiUrl);
+        const data = await response.json();
+        
+        if (data.length === 0) {
+          cardContainer.innerHTML = `<div class="text-center py-10 text-slate-500 text-xs">目前尚無後台資料</div>`;
+          return;
+        }
+
+        cardContainer.innerHTML = data.reverse().map(row => `
+          <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2 shadow-md">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <span class="text-xs font-mono text-amber-400 font-bold">
+                <i class="fas fa-clock mr-1"></i> ${escapeHtml(row['時間戳記'] || '未知時間')}
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                已同步
+              </span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              ${Object.entries(row).slice(1, 7).map(([key, val]) => `
+                <div class="space-y-0.5">
+                  <span class="text-[10px] text-slate-400 block">${escapeHtml(key)}</span>
+                  <span class="text-slate-200 font-medium truncate block">${escapeHtml(val || '-')}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('');
+
+      } catch (err) {
+        cardContainer.innerHTML = `<div class="text-center py-10 text-rose-400 text-xs">⚠️ 載入後台數據失敗，請檢查網路連線</div>`;
+      }
+    }
+
     const verifyPassword = () => {
       if (elements.dashboardPasswordInput.value === CORRECT_PASSWORD) {
         elements.dashboardPasswordModal.classList.add('hidden');
         elements.dashboardPasswordModal.classList.remove('flex');
 
         const activeIndex = typeof window.currentFormIndex !== 'undefined' ? window.currentFormIndex : 0;
+        
+        // 1. 取得對應的 Google 試算表原始網址
         const targetUrl = FORM_SHEET_URLS[activeIndex] || FORM_SHEET_URLS[0];
 
-        elements.dashboardExternalLink.href = targetUrl;
-        elements.dashboardIframe.src = targetUrl + "?rm=minimal";
+        // 2. 【新增】將網址賦值給右上角的「開啟外部連結」按鈕
+        if (elements.dashboardExternalLink) {
+          elements.dashboardExternalLink.href = targetUrl;
+        }
+        
+        // 3. 呼叫卡片載入函式，不再依賴 iframe
+        loadDashboardDataAsCards(activeIndex);
 
         elements.dashboardModal.classList.remove('hidden');
         elements.dashboardModal.classList.add('flex');
@@ -1414,7 +1489,6 @@
     const closeDashboardModal = () => {
       elements.dashboardModal.classList.add('hidden');
       elements.dashboardModal.classList.remove('flex');
-      elements.dashboardIframe.src = "about:blank";
       unlockBackgroundScroll();
     };
     elements.dashboardCloseBtn.addEventListener('click', closeDashboardModal);
